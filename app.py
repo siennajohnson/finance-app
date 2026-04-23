@@ -2,129 +2,155 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Financial Analytics Project")
+st.set_page_config(page_title="Stock & Portfolio Analyzer", layout="wide")
 
-st.title("📊 Financial Data Analytics Dashboard")
+st.title("📈 Stock & Portfolio Trend Analyzer")
 
-# -----------------------------
-# USER INPUTS
-# -----------------------------
-stock = st.text_input("Enter Stock Ticker", "AAPL")
+# ---------------------------------------------------
+# FUNCTIONS
+# ---------------------------------------------------
 
-portfolio_input = st.text_input(
-    "Enter Portfolio Tickers (comma separated)",
-    "AAPL,MSFT,NVDA"
-)
+def load_data(ticker):
+    df = yf.download(ticker, period="6mo", auto_adjust=True)
+    return df
 
-# -----------------------------
-# STEP 1 STOCK ANALYSIS
-# -----------------------------
-st.header("📈 Step 1: Individual Stock Analysis")
+def calculate_rsi(data, window=14):
+    delta = data["Close"].diff()
 
-# Pull 6 months data
-df = yf.download(stock, period="6mo")
+    gain = np.where(delta > 0, delta, 0)
+    loss = np.where(delta < 0, -delta, 0)
 
-if not df.empty:
-
-    # Use Close Price
-    df = df[["Close"]].dropna()
-
-    # Moving Averages
-    df["MA20"] = df["Close"].rolling(20).mean()
-    df["MA50"] = df["Close"].rolling(50).mean()
-
-    # Graph
-    fig = go.Figure()
-
-    fig.add_trace(go.Scatter(
-        x=df.index,
-        y=df["Close"],
-        name="Close Price"
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=df.index,
-        y=df["MA20"],
-        name="20-Day MA"
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=df.index,
-        y=df["MA50"],
-        name="50-Day MA"
-    ))
-
-    fig.update_layout(
-        title=f"{stock} Price + Moving Averages (6 Months)",
-        xaxis_title="Date",
-        yaxis_title="Price",
-        template="plotly_white"
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-
-    # RSI
-    delta = df["Close"].diff()
-
-    gain = delta.where(delta > 0, 0).rolling(14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+    gain = pd.Series(gain, index=data.index).rolling(window=window).mean()
+    loss = pd.Series(loss, index=data.index).rolling(window=window).mean()
 
     rs = gain / loss
-    df["RSI"] = 100 - (100 / (1 + rs))
+    rsi = 100 - (100 / (1 + rs))
 
-    latest_rsi = df["RSI"].iloc[-1]
+    return rsi
 
-    st.subheader("RSI Indicator")
-    st.line_chart(df["RSI"])
-
-    # Determine Trend
-    if latest_rsi > 55:
-        st.success("Trend: Upward 📈")
-    elif latest_rsi < 45:
-        st.error("Trend: Downward 📉")
+def stock_trend(ma20, ma50):
+    if ma20.iloc[-1] > ma50.iloc[-1]:
+        return "📈 Upward Trend"
+    elif ma20.iloc[-1] < ma50.iloc[-1]:
+        return "📉 Downward Trend"
     else:
-        st.info("Trend: Mixed ↔️")
+        return "➡ Mixed Trend"
 
-# -----------------------------
-# STEP 2 PORTFOLIO
-# -----------------------------
-st.header("💼 Step 2: Portfolio Analysis")
+def portfolio_metrics(returns, benchmark_returns):
+    total_return = (1 + returns).prod() - 1
+    benchmark_return = (1 + benchmark_returns).prod() - 1
 
-tickers = [x.strip() for x in portfolio_input.split(",")]
+    volatility = returns.std() * np.sqrt(252)
 
-prices = yf.download(tickers, period="6mo")["Close"]
+    risk_free = 0.02
+    sharpe = ((returns.mean() * 252) - risk_free) / volatility
 
-returns = prices.pct_change().dropna()
+    difference = total_return - benchmark_return
 
-weights = np.array([1/len(tickers)] * len(tickers))
+    return total_return, benchmark_return, difference, volatility, sharpe
 
-portfolio_returns = returns.dot(weights)
+# ---------------------------------------------------
+# PART 1 STOCK ANALYSIS
+# ---------------------------------------------------
 
-portfolio_growth = (1 + portfolio_returns).cumprod()
+st.header("Part 1: Individual Stock Analysis")
 
-# Benchmark
-spy = yf.download("SPY", period="6mo")["Close"]
-spy_returns = spy.pct_change().dropna()
-spy_growth = (1 + spy_returns).cumprod()
+ticker = st.text_input("Enter Stock Ticker (Example: AAPL)").upper()
 
-# Compare Chart
-compare = pd.DataFrame({
-    "Portfolio": portfolio_growth,
-    "SPY": spy_growth
-})
+if ticker:
+    try:
+        df = load_data(ticker)
 
-st.line_chart(compare)
+        df["MA20"] = df["Close"].rolling(20).mean()
+        df["MA50"] = df["Close"].rolling(50).mean()
+        df["RSI"] = calculate_rsi(df)
 
-# Metrics
-total_portfolio_return = (portfolio_growth.iloc[-1] - 1) * 100
-total_spy_return = (spy_growth.iloc[-1] - 1) * 100
+        trend = stock_trend(df["MA20"], df["MA50"])
 
-st.write("Portfolio Return:", round(total_portfolio_return,2), "%")
-st.write("SPY Return:", round(total_spy_return,2), "%")
+        st.subheader(f"{ticker} Moving Average Chart")
 
-if total_portfolio_return > total_spy_return:
-    st.success("Portfolio Outperformed SPY")
-else:
-    st.warning("Portfolio Underperformed SPY")
+        fig, ax = plt.subplots(figsize=(12,6))
+        ax.plot(df.index, df["Close"], label="Close Price")
+        ax.plot(df.index, df["MA20"], label="20 Day MA")
+        ax.plot(df.index, df["MA50"], label="50 Day MA")
+        ax.legend()
+        st.pyplot(fig)
+
+        latest_rsi = df["RSI"].iloc[-1]
+
+        st.metric("Current RSI", round(latest_rsi,2))
+        st.success(trend)
+
+    except:
+        st.error("Invalid ticker symbol")
+
+# ---------------------------------------------------
+# PART 2 PORTFOLIO ANALYSIS
+# ---------------------------------------------------
+
+st.header("Part 2: Portfolio Analysis")
+
+st.write("Enter up to 5 tickers and portfolio weights.")
+
+tickers = []
+weights = []
+
+for i in range(5):
+    col1, col2 = st.columns(2)
+
+    with col1:
+        t = st.text_input(f"Ticker {i+1}", key=f"ticker{i}")
+
+    with col2:
+        w = st.number_input(f"Weight % {i+1}", min_value=0.0, max_value=100.0, key=f"weight{i}")
+
+    if t:
+        tickers.append(t.upper())
+        weights.append(w / 100)
+
+benchmark = st.text_input("Benchmark Ticker (Example: SPY)", value="SPY").upper()
+
+if st.button("Analyze Portfolio"):
+
+    if len(tickers) == 0:
+        st.error("Please enter portfolio tickers")
+    elif round(sum(weights),2) != 1.00:
+        st.error("Weights must equal 100%")
+    else:
+        try:
+            portfolio_prices = pd.DataFrame()
+
+            for t in tickers:
+                temp = load_data(t)["Close"]
+                portfolio_prices[t] = temp
+
+            portfolio_returns = portfolio_prices.pct_change().dropna()
+
+            weighted_returns = (portfolio_returns * weights).sum(axis=1)
+
+            benchmark_data = load_data(benchmark)["Close"]
+            benchmark_returns = benchmark_data.pct_change().dropna()
+
+            benchmark_returns = benchmark_returns.loc[weighted_returns.index]
+
+            total_return, benchmark_return, difference, volatility, sharpe = portfolio_metrics(
+                weighted_returns, benchmark_returns
+            )
+
+            st.subheader("Portfolio Results")
+
+            st.metric("Total Return", f"{total_return*100:.2f}%")
+            st.metric("Benchmark Return", f"{benchmark_return*100:.2f}%")
+            st.metric("Outperformance / Underperformance", f"{difference*100:.2f}%")
+            st.metric("Annualized Volatility", f"{volatility*100:.2f}%")
+            st.metric("Sharpe Ratio", f"{sharpe:.2f}")
+
+            if total_return > benchmark_return:
+                st.success("✅ Portfolio Meets / Beats Benchmark")
+            else:
+                st.error("❌ Portfolio Fails to Meet Benchmark")
+
+        except:
+            st.error("Error loading portfolio data")
