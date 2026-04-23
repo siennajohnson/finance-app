@@ -1,6 +1,4 @@
-git add requirements.txt
-git commit -m "add requirements file"
-git push
+
 import streamlit as st
 import yfinance as yf
 import pandas as pd
