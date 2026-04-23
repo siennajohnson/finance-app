@@ -3,178 +3,149 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from ta.momentum import RSIIndicator
 
-st.set_page_config(page_title="Stock & Portfolio Analyzer", layout="wide")
+st.set_page_config(page_title="Finance Dashboard", layout="wide")
 
-st.title("📈 Stock & Portfolio Trend Analyzer")
+# =========================
+# DATA FUNCTIONS
+# =========================
 
-# -----------------------------
-# FUNCTIONS
-# -----------------------------
+def get_stock_data(ticker, period="6mo"):
+    df = yf.download(ticker, period=period)
+    df = df[['Close']].dropna()
+    return df
 
-def load_data(ticker):
-    try:
-        df = yf.download(ticker, period="6mo", auto_adjust=False, progress=False)
-        return df
-    except Exception as e:
-        st.error(f"Download error for {ticker}: {e}")
-        return pd.DataFrame()
+def add_moving_averages(df):
+    df['20MA'] = df['Close'].rolling(20).mean()
+    df['50MA'] = df['Close'].rolling(50).mean()
+    return df
 
-def calculate_rsi(data, window=14):
-    delta = data["Close"].diff()
+def add_rsi(df):
+    df['RSI'] = RSIIndicator(df['Close'], window=14).rsi()
+    return df
 
-    gain = np.where(delta > 0, delta, 0)
-    loss = np.where(delta < 0, -delta, 0)
+def detect_trend(df):
+    price = df['Close'].iloc[-1]
+    ma20 = df['20MA'].iloc[-1]
+    ma50 = df['50MA'].iloc[-1]
 
-    gain = pd.Series(gain, index=data.index).rolling(window).mean()
-    loss = pd.Series(loss, index=data.index).rolling(window).mean()
-
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
-
-    return rsi
-
-def stock_trend(ma20, ma50):
-    if ma20.iloc[-1] > ma50.iloc[-1]:
-        return "📈 Upward Trend"
-    elif ma20.iloc[-1] < ma50.iloc[-1]:
-        return "📉 Downward Trend"
+    if price > ma20 > ma50:
+        return "Strong Uptrend"
+    elif price < ma20 < ma50:
+        return "Strong Downtrend"
     else:
-        return "➡ Mixed Trend"
+        return "Mixed Trend"
 
-def portfolio_metrics(returns, benchmark_returns):
-    total_return = (1 + returns).prod() - 1
-    benchmark_return = (1 + benchmark_returns).prod() - 1
+def rsi_signal(df):
+    rsi = df['RSI'].iloc[-1]
+    if rsi > 70:
+        return "Overbought (Sell)"
+    elif rsi < 30:
+        return "Oversold (Buy)"
+    return "Neutral"
 
-    volatility = returns.std() * np.sqrt(252)
+def volatility(df):
+    returns = df['Close'].pct_change()
+    vol = returns.std() * np.sqrt(252)
 
-    risk_free = 0.02
-    sharpe = ((returns.mean() * 252) - risk_free) / volatility
-
-    difference = total_return - benchmark_return
-
-    return total_return, benchmark_return, difference, volatility, sharpe
-
-# -----------------------------
-# PART 1: STOCK ANALYSIS
-# -----------------------------
-
-st.header("Part 1: Individual Stock Analysis")
-
-ticker = st.text_input("Enter Stock Ticker (e.g., AAPL)").upper().strip()
-
-if ticker:
-
-    df = load_data(ticker)
-
-    # 🔥 FIX: Proper validation instead of fake "invalid ticker"
-    if df is None or df.empty:
-        st.error("❌ No data found. Check ticker symbol (e.g., AAPL, TSLA, MSFT).")
+    if vol > 0.40:
+        level = "High"
+    elif vol > 0.25:
+        level = "Medium"
     else:
-        df["MA20"] = df["Close"].rolling(20).mean()
-        df["MA50"] = df["Close"].rolling(50).mean()
-        df["RSI"] = calculate_rsi(df)
+        level = "Low"
 
-        trend = stock_trend(df["MA20"], df["MA50"])
+    return vol, level
 
-        st.subheader(f"{ticker} Moving Average Chart")
+def recommendation(trend, rsi_sig):
+    if trend == "Strong Uptrend" and rsi_sig != "Overbought (Sell)":
+        return "BUY"
+    elif trend == "Strong Downtrend" or rsi_sig == "Overbought (Sell)":
+        return "SELL"
+    return "HOLD"
 
-        fig, ax = plt.subplots(figsize=(12, 6))
-        ax.plot(df.index, df["Close"], label="Close Price")
-        ax.plot(df.index, df["MA20"], label="20-Day MA")
-        ax.plot(df.index, df["MA50"], label="50-Day MA")
-        ax.legend()
-        ax.set_title(f"{ticker} Price + Moving Averages")
-        st.pyplot(fig)
+# =========================
+# PORTFOLIO FUNCTIONS
+# =========================
 
-        st.metric("RSI", round(df["RSI"].iloc[-1], 2))
-        st.success(trend)
+def get_portfolio_data(tickers):
+    return yf.download(tickers, period="1y")['Close']
 
-# -----------------------------
-# PART 2: PORTFOLIO ANALYSIS
-# -----------------------------
+def compute_returns(data):
+    return data.pct_change().dropna()
 
+def portfolio_returns(returns, weights):
+    return returns.dot(weights)
+
+def metrics(port_ret, bench_ret):
+    total_port = (1 + port_ret).prod() - 1
+    total_bench = (1 + bench_ret).prod() - 1
+    vol = port_ret.std() * np.sqrt(252)
+    sharpe = (port_ret.mean() * 252) / (port_ret.std() * np.sqrt(252))
+    return total_port, total_bench, vol, sharpe
+
+# =========================
+# UI
+# =========================
+
+st.title("📊 Finance Analytics Dashboard")
+
+# -------------------------
+# STOCK ANALYSIS
+# -------------------------
+st.header("Part 1: Stock Analysis")
+
+ticker = st.text_input("Stock Ticker", "AAPL")
+
+if st.button("Analyze Stock"):
+
+    df = get_stock_data(ticker)
+    df = add_moving_averages(df)
+    df = add_rsi(df)
+
+    trend = detect_trend(df)
+    rsi_sig = rsi_signal(df)
+    vol, vol_level = volatility(df)
+    rec = recommendation(trend, rsi_sig)
+
+    st.subheader("Results")
+    st.write("Trend:", trend)
+    st.write("RSI:", rsi_sig)
+    st.write(f"Volatility: {vol:.2%} ({vol_level})")
+    st.write("Recommendation:", rec)
+
+    st.line_chart(df[['Close', '20MA', '50MA']])
+
+# -------------------------
+# PORTFOLIO ANALYSIS
+# -------------------------
 st.header("Part 2: Portfolio Analysis")
 
-st.write("Enter up to 5 tickers and their weights (must equal 100%).")
-
-tickers = []
-weights = []
-
-for i in range(5):
-    col1, col2 = st.columns(2)
-
-    with col1:
-        t = st.text_input(f"Ticker {i+1}", key=f"t{i}").upper().strip()
-
-    with col2:
-        w = st.number_input(f"Weight % {i+1}", 0.0, 100.0, key=f"w{i}")
-
-    if t:
-        tickers.append(t)
-        weights.append(w / 100)
-
-benchmark = st.text_input("Benchmark (e.g., SPY)", "SPY").upper().strip()
+tickers_input = st.text_input("5 tickers", "AAPL,MSFT,GOOGL,AMZN,TSLA")
+weights_input = st.text_input("Weights", "0.2,0.2,0.2,0.2,0.2")
 
 if st.button("Analyze Portfolio"):
 
-    if len(tickers) == 0:
-        st.error("Please enter at least one ticker.")
+    tickers = [t.strip() for t in tickers_input.split(",")]
+    weights = np.array([float(w) for w in weights_input.split(",")])
 
-    elif round(sum(weights), 2) != 1.00:
-        st.error("Weights must sum to 100%.")
+    data = get_portfolio_data(tickers)
+    returns = compute_returns(data)
+    port_ret = portfolio_returns(returns, weights)
 
+    bench = yf.download("SPY", period="1y")['Close'].pct_change().dropna()
+
+    total_port, total_bench, vol, sharpe = metrics(port_ret, bench)
+
+    st.subheader("Results")
+
+    st.write("Portfolio Return:", f"{total_port:.2%}")
+    st.write("Benchmark Return (SPY):", f"{total_bench:.2%}")
+    st.write("Volatility:", f"{vol:.2%}")
+    st.write("Sharpe Ratio:", f"{sharpe:.2f}")
+
+    if total_port > total_bench:
+        st.success("Outperformed Benchmark")
     else:
-        try:
-            price_data = pd.DataFrame()
-
-            # Load each stock safely
-            valid_tickers = []
-
-            for t in tickers:
-                df = load_data(t)
-
-                if df is None or df.empty:
-                    st.warning(f"Skipping {t}: no data found")
-                    continue
-
-                price_data[t] = df["Close"]
-                valid_tickers.append(t)
-
-            if len(valid_tickers) == 0:
-                st.error("No valid tickers to analyze.")
-            else:
-                returns = price_data.pct_change().dropna()
-
-                # match weights to valid tickers only
-                weights_filtered = [weights[tickers.index(t)] for t in valid_tickers]
-
-                weighted_returns = (returns[valid_tickers] * weights_filtered).sum(axis=1)
-
-                bench_df = load_data(benchmark)
-
-                if bench_df.empty:
-                    st.error("Benchmark ticker invalid.")
-                else:
-                    bench_returns = bench_df["Close"].pct_change().dropna()
-                    bench_returns = bench_returns.loc[weighted_returns.index]
-
-                    total_return, benchmark_return, diff, vol, sharpe = portfolio_metrics(
-                        weighted_returns, bench_returns
-                    )
-
-                    st.subheader("Results")
-
-                    st.metric("Portfolio Return", f"{total_return*100:.2f}%")
-                    st.metric("Benchmark Return", f"{benchmark_return*100:.2f}%")
-                    st.metric("Difference", f"{diff*100:.2f}%")
-                    st.metric("Volatility", f"{vol*100:.2f}%")
-                    st.metric("Sharpe Ratio", f"{sharpe:.2f}")
-
-                    if total_return > benchmark_return:
-                        st.success("✅ Portfolio beats benchmark")
-                    else:
-                        st.error("❌ Portfolio underperforms benchmark")
-
-        except Exception as e:
-            st.error(f"Error: {e}")
+        st.warning("Underperformed Benchmark")
