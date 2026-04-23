@@ -1,5 +1,4 @@
-pip install streamlit
-import yfinance as yf
+streamlit
+yfinance
 pandas
 numpy
-matplotlib
