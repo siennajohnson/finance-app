@@ -63,7 +63,7 @@ st.markdown("""
 # ── Helper: flatten yfinance MultiIndex columns ───────────────
 # Newer yfinance returns MultiIndex columns like ("Close", "AAPL").
 # This function detects the level order and flattens to simple labels
-# so that raw["Close"] works regardless of yfinance version so price data can be accessed consistently.
+### So that raw["Close"] works regardless of yfinance version by normalizing the column so price data can be accessed consistently.
 PRICE_COLS = {"Close", "Open", "High", "Low", "Volume"}
 
 def flatten_columns(df):
@@ -79,6 +79,7 @@ def flatten_columns(df):
 
 # ══════════════════════════════════════════════════════════════
 # SIDEBAR — User Input
+### This creates the left sidebar where users input a stock ticker symbol with "Run Analysis" button that triggers the analysis pipline.
 # ══════════════════════════════════════════════════════════════
 with st.sidebar:
     st.title("⚙️ Settings")
@@ -108,7 +109,8 @@ st.markdown("---")
 if run_btn:
 
     # ── Step 1: Data Collection ───────────────────────────────
-    ## Download 6 months of daily closing price data from Yahoo Finance
+    ### Download 6 months of daily closing price data from Yahoo Finance
+    ### Displays the raw data in an expandable section
     st.subheader(f"📥 Step 1: Data Collection — {ticker_input}")
 
     with st.spinner(f"Downloading data for {ticker_input}..."):
@@ -147,7 +149,8 @@ if run_btn:
     st.markdown("---")
 
     # ── Step 2: Moving Averages (Trend Analysis) ──────────────
-    ## Calculate the 20-day and 50-day moving averages to identify trend direction.
+    ### Calculate the 20-day and 50-day moving averages to identify trend direction.
+    ### Visualizes price and moving averages on a line chart
     # MA20 = average of last 20 closing prices (short-term trend)
     # MA50 = average of last 50 closing prices (long-term trend)
     st.subheader("📉 Step 2: Trend Analysis (Moving Averages)")
@@ -202,7 +205,9 @@ if run_btn:
     st.markdown("---")
 
     # ── Step 3: RSI (Momentum) ────────────────────────────────
-    ## Relative Strength Index measures how fast and how much the price is moving.
+    ### Relative Strength Index (RSI) measures how fast and how much the price is moving.
+    ### Classifies as "Overbought" (>70), "Oversold" (<30), or "Neutral"
+    ### Plots RSI with shaded zones for overbought/oversold regions
     # Formula: RSI = 100 - (100 / (1 + RS))
     #   RS = average gain over 14 days / average loss over 14 days
     st.subheader("⚡ Step 3: Momentum (RSI)")
@@ -269,7 +274,9 @@ if run_btn:
     st.markdown("---")
 
     # ── Step 4: Volatility ────────────────────────────────────
-    ## 20-day Annualized Volatility measures how much the price fluctuates.
+    ### 20-day Annualized Volatility measures how much the price fluctuates.
+    ### Classifies as "High" (>40%), "Medium" (25-40%), or "Low" (<25%)
+    ### Visualizes volatility trend over time
     # Uses log returns (more statistically stable than simple returns).
     # Annualized by multiplying by √252 (trading days per year).
     st.subheader("🌊 Step 4: Volatility")
@@ -316,7 +323,9 @@ if run_btn:
     st.markdown("---")
 
     # ── Step 5: Trading Recommendation ───────────────────────
-    ## Combine trend, RSI, and volatility signals into one final call.
+    ### Combine trend, RSI, and volatility signals into one final call.
+    ### Generates a final recommendation: BUY, SELL, or HOLD
+    ### Creates a summary table with all key metrics
     # Scoring:
     #   uptrend  = +1,  downtrend = -1,  mixed = 0
     #   oversold = +1,  overbought = -1, neutral = 0
@@ -373,6 +382,7 @@ if run_btn:
     st.dataframe(summary, use_container_width=True, hide_index=True)
 
 # ── Placeholder shown before the user clicks Run ──────────────
+### Shows instructional text before the user clicks "Run Analysis"
 else:
     st.info("👈 Enter a ticker symbol in the sidebar and click **Run Analysis** to begin.")
     st.markdown("""
