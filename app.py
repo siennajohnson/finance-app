@@ -1,5 +1,4 @@
-# ── Install Libraries ──────────────────────────────────────────
-!pip install streamlit
+
 
 ## ============================================================
 ## FIN 330 — Final Project: Individual Stock Analysis Dashboard
