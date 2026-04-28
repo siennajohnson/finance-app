@@ -7,7 +7,7 @@
 ## To run locally:   streamlit run fin330_app.py
 ## To deploy:        Push to GitHub → Streamlit Community Cloud
 ## ============================================================
-
+### Lines 1-59 are the setup and configuration.
 
 # ── Import Libraries ──────────────────────────────────────────
 import streamlit as st          # Web app framework
@@ -28,6 +28,7 @@ st.set_page_config(
 
 
 # ── Custom CSS ────────────────────────────────────────────────
+### Defines custom CSS styling for buy/sell/hold signals.
 st.markdown("""
 <style>
     [data-testid="metric-container"] {
@@ -62,7 +63,7 @@ st.markdown("""
 # ── Helper: flatten yfinance MultiIndex columns ───────────────
 # Newer yfinance returns MultiIndex columns like ("Close", "AAPL").
 # This function detects the level order and flattens to simple labels
-# so that raw["Close"] works regardless of yfinance version.
+# so that raw["Close"] works regardless of yfinance version so price data can be accessed consistently.
 PRICE_COLS = {"Close", "Open", "High", "Low", "Volume"}
 
 def flatten_columns(df):
