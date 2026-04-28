@@ -162,7 +162,10 @@ if run_btn:
     ma_50_series = close.rolling(50).mean()
 
     # Most recent values as plain floats for comparison
-    current_price = float(close.iloc[-1])
+    # float converts it to a number with a decimal
+    #loc = label based indexing
+    #iloc = integer position indexing
+    current_price = float(close.iloc[-1]) # gets last closing price
     ma_20         = float(ma_20_series.iloc[-1])
     ma_50         = float(ma_50_series.iloc[-1])
 
